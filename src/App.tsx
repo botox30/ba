@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useNavigate  } from 'react-router-dom';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import Navigation from './components/Navigation';
 import AuthRedirect from './components/AuthRedirect';
+import LoadingScreen from './components/LoadingScreen';
 
 import { getUser } from './utils/auth';
 
@@ -43,25 +44,52 @@ function App() {
     const location = useLocation();
     const [navDirection] = useState<'forward' | 'backward'>('forward');
     const [shouldAnimate] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
+    const [authChecked, setAuthChecked] = useState(false);
     const navigate = useNavigate();
 
     const shouldShowNav = !NO_NAV_ROUTES.some(
         route => location.pathname === route || location.pathname.startsWith(route)
     );
 
+    // Check if running as PWA
+    const isPWA = () => {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               (window.navigator as any).standalone === true ||
+               document.referrer.includes('android-app://');
+    };
+
     useEffect(() => {
         (async () => {
-            const user = await getUser();
-            console.log('Current user:', user);
-            console.log('Current pathname:', location.pathname);
-            if (location.pathname === '/') {
-                if (user) {
-                    console.log('User authenticated, redirecting to home');
-                    navigate(`/${user.id}/home`);
+            try {
+                setIsLoading(true);
+                const user = await getUser();
+                console.log('Current user:', user);
+                console.log('Current pathname:', location.pathname);
+                console.log('Is PWA:', isPWA());
+                
+                if (location.pathname === '/') {
+                    if (user) {
+                        console.log('User authenticated, redirecting to home');
+                        navigate(`/${user.id}/home`);
+                    } else if (isPWA()) {
+                        // If PWA and no auth, show a message to open in browser
+                        console.log('PWA detected but no auth, staying on login');
+                    }
                 }
+            } catch (error) {
+                console.error('Error during auth check:', error);
+            } finally {
+                setIsLoading(false);
+                setAuthChecked(true);
             }
         })();
     }, [location, navigate]);
+
+    // Show loading screen while checking auth
+    if (isLoading || !authChecked) {
+        return <LoadingScreen />;
+    }
 
     const RenderAllRoutes = () => (
         <Routes location={location}>
